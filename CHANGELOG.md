@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.2.0 — 2026-11-12
+All notable changes. Versions follow [semver](https://semver.org/); tags are `vX.Y.Z`.
+
+## [0.2.0] — 2026-11-12
 
 ### New
 - k9s-style layout: a header with tool status and per-pane key hints, side-by-side clusters and nodes panes, a cluster overview strip, and a breadcrumb footer.
@@ -23,6 +25,8 @@
 ### Faster
 - Node detail runs inspect, stats, and kubectl queries in parallel: about 0.4s warm, down from several seconds.
 
-## 0.1.0
+## 0.1.0 (unreleased, pre-repo)
 
 - First release: numbered-menu dashboard, create/start/stop/delete, k9s, context switch, image load, log export.
+
+[0.2.0]: https://github.com/chanupen/kindtui/releases/tag/v0.2.0

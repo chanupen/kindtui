@@ -40,6 +40,11 @@ KINDTUI_LIVE=1 go test ./internal/engine/ -run TestLiveDiscover -v
 
 ## Releases
 
-1. Update `CHANGELOG.md` and `version` in `main.go`.
-2. `git tag v0.x.y && git push --tags`.
-3. CI tests the tag, builds `dist/*`, and attaches the binaries to a GitHub release.
+1. Update `CHANGELOG.md` (new `## [x.y.z] — date` section and link) and `version` in `main.go`. Also update the version in the README and quickstart download commands.
+2. `make vet test`, then commit and push to `main`.
+3. `git tag -a vX.Y.Z -m "kindtui X.Y.Z" && git push origin vX.Y.Z`
+4. CI (`.github/workflows/ci.yml`) tests the tag, runs `make dist VERSION=vX.Y.Z`, and attaches `kindtui-{linux,darwin}-{amd64,arm64}` to a GitHub release.
+5. Check it: `gh release view vX.Y.Z -R chanupen/kindtui`.
+6. Update your local install: `make build VERSION=vX.Y.Z && install -m 0755 bin/kindtui ~/.local/bin/`.
+
+Released so far: [v0.2.0](https://github.com/chanupen/kindtui/releases/tag/v0.2.0).

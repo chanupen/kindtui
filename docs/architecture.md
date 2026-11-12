@@ -4,7 +4,7 @@ Reference for the next change to this tree. User docs: [README](../README.md), [
 
 kindtui is a Bubble Tea program in ``. It shells out to `docker` or `podman`, `kind`, and `kubectl`. It does not link the kind or client-go libraries. That keeps the binary small and matches the CLIs already installed on the machine.
 
-Version is `main.version` in `main.go`, stamped by the Makefile ldflags. Current release: 0.2.0. In a git checkout, `make` stamps `git describe` instead.
+Version is `main.version` in `main.go`, stamped by the Makefile ldflags. Current release: [v0.2.0](https://github.com/chanupen/kindtui/releases/tag/v0.2.0). In a git checkout, `make` stamps `git describe` instead. Release binaries are built by CI on `v*` tags (see [CONTRIBUTING](../CONTRIBUTING.md#releases)).
 
 ## File map
 

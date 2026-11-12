@@ -49,13 +49,29 @@ You can see every cluster and every node at a glance, log in to any node with on
 
 ## Install
 
+Latest release: **[v0.2.0](https://github.com/chanupen/kindtui/releases/tag/v0.2.0)**. Binaries: `kindtui-linux-amd64`, `kindtui-linux-arm64`, `kindtui-darwin-amd64`, `kindtui-darwin-arm64`.
+
+**Prebuilt binary (recommended)**
+
+The repository is private, so download with the GitHub CLI (`gh auth login` first):
+
+```sh
+OS=$(uname -s | tr A-Z a-z)                                   # linux | darwin
+ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')     # amd64 | arm64
+gh release download v0.2.0 -R chanupen/kindtui -p "kindtui-$OS-$ARCH" -O kindtui
+install -m 0755 kindtui ~/.local/bin/kindtui                  # or: sudo install kindtui /usr/local/bin/
+kindtui --version
+```
+
+On macOS, if Gatekeeper blocks the binary: `xattr -d com.apple.quarantine ~/.local/bin/kindtui`.
+
 **From source**
 
 ```sh
 git clone https://github.com/chanupen/kindtui.git
 cd kindtui
 make build            # writes bin/kindtui
-sudo install bin/kindtui /usr/local/bin/
+install -m 0755 bin/kindtui ~/.local/bin/   # or: sudo install bin/kindtui /usr/local/bin/
 ```
 
 **With `go install`**
@@ -66,7 +82,9 @@ go install github.com/chanupen/kindtui@latest
 
 The repository is private, so first set `GOPRIVATE=github.com/chanupen/*` and make sure git can authenticate to GitHub.
 
-**Prebuilt binaries:** each `v*` tag builds Linux and macOS binaries for amd64 and arm64 and attaches them to the GitHub release.
+**Upgrading:** repeat the download with the new tag, or `git pull && make build` and reinstall. Settings live nowhere else, so nothing needs migrating.
+
+> If you previously used a shell alias for an older build (for example `alias kindtui=.../bin/kindtui`), point it at the new path or remove it so `PATH` finds the installed binary.
 
 ## Quick start
 
