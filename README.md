@@ -35,6 +35,8 @@ You can see every cluster and every node at a glance, log in to any node with on
 - **Cluster overview.** Kubernetes version, API endpoint, pod health, restart count, and the newest warning event.
 - **Integrations.** Open [k9s](https://k9scli.io/) on a cluster, switch your kubectl context, load local images, or export logs.
 - **Works with Docker, Podman, and Colima.** kindtui finds a working runtime even when `docker` is a broken symlink, and pins kind's provider so it uses the same one.
+- **Learn the commands.** `K` opens a command reference that shows the exact `kind` / `kubectl` / `docker` command behind every action, filled in for the selected cluster and node. `y` copies it, also over SSH. Every log and operation view shows the command it is running.
+- **Command palette.** `ctrl-p` searches every action by name ("kubelet", "stop", "describe") and runs it.
 - **Keyboard first, mouse optional.** The header shows k9s-style hints, `:` opens a command line with tab completion, `/` filters, and you can click or scroll.
 
 ## Requirements
@@ -49,7 +51,7 @@ You can see every cluster and every node at a glance, log in to any node with on
 
 ## Install
 
-Latest release: **[v0.2.0](https://github.com/chanupen/kindtui/releases/tag/v0.2.0)**. Binaries: `kindtui-linux-amd64`, `kindtui-linux-arm64`, `kindtui-darwin-amd64`, `kindtui-darwin-arm64`.
+Latest release: **[v0.3.0](https://github.com/chanupen/kindtui/releases/tag/v0.3.0)**. Binaries: `kindtui-linux-amd64`, `kindtui-linux-arm64`, `kindtui-darwin-amd64`, `kindtui-darwin-arm64`.
 
 **Prebuilt binary (recommended)**
 
@@ -58,7 +60,7 @@ The repository is private, so download with the GitHub CLI (`gh auth login` firs
 ```sh
 OS=$(uname -s | tr A-Z a-z)                                   # linux | darwin
 ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')     # amd64 | arm64
-gh release download v0.2.0 -R chanupen/kindtui -p "kindtui-$OS-$ARCH" -O kindtui
+gh release download v0.3.0 -R chanupen/kindtui -p "kindtui-$OS-$ARCH" -O kindtui
 install -m 0755 kindtui ~/.local/bin/kindtui                  # or: sudo install kindtui /usr/local/bin/
 kindtui --version
 ```
@@ -112,7 +114,7 @@ The full walkthrough is in **[docs/quickstart.md](docs/quickstart.md)**.
 | `i` | load image | `esc` | back to clusters |
 | `e` | export logs | | |
 
-Everywhere: `tab` switches panes, `/` filters, `:` opens the command line, `ctrl-r` refreshes, `?` shows help, and `q` quits. The full reference is in **[docs/usage.md](docs/usage.md)**.
+Everywhere: `tab` switches panes, `ctrl-p` opens the command palette, `K` opens the command reference, `/` filters, `:` opens the command line, `ctrl-r` refreshes, `?` shows help, and `q` quits. Every key with its shell equivalent is in **[docs/commands.md](docs/commands.md)**; the screens are described in **[docs/usage.md](docs/usage.md)**.
 
 ## Documentation
 
@@ -120,6 +122,7 @@ Everywhere: `tab` switches panes, `/` filters, `:` opens the command line, `ctrl
 | --- | --- |
 | [Quick start](docs/quickstart.md) | Install, first cluster, logging in to nodes, logs, cleanup |
 | [Usage](docs/usage.md) | Every screen, key, and `:` command |
+| [Command reference](docs/commands.md) | Every action with its key, `:` command, and equivalent shell command (generated) |
 | [Troubleshooting](docs/troubleshooting.md) | Runtime down, Podman and Colima, empty columns, k9s, shells |
 | [Architecture](docs/architecture.md) | How it works, code layout, and how to add a command |
 | [Examples](examples/) | kind config files |

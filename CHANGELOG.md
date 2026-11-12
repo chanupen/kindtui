@@ -2,6 +2,20 @@
 
 All notable changes. Versions follow [semver](https://semver.org/); tags are `vX.Y.Z`.
 
+## [0.3.0] — 2026-11-12
+
+### New
+- **Command reference** (`K` or `:cmds`): every action with its key, `:` command, scope, and the equivalent `kind` / `kubectl` / `docker`/`podman` command, filled in for the selected cluster and node. `/` filters, `enter` runs, `y` copies.
+- **Command palette** (`ctrl-p`): search every action by name or description and run it. `ctrl-y` copies its command.
+- **Command shown in every log and operation view** (`$ podman logs -f … lab-worker`).
+- **Copy to clipboard** through `wl-copy`/`xclip`/`pbcopy` plus OSC 52, so it also works over SSH and in tmux.
+- `kindtui --cheatsheet` prints the whole reference as Markdown; `docs/commands.md` is generated from it (`make docs`).
+- New `:` commands: `node-start`, `node-stop`, `node-restart`, `containerd`, `cmds`, `palette`.
+
+### Changed
+- One action registry (`internal/ui/actions.go`) now drives key dispatch, header hints, help, the `:` command line and completion, the palette, the reference, and the docs. Tests check that keys and names are unique and that the docs are current.
+- The help overlay is generated from the registry and uses up to three columns.
+
 ## [0.2.0] — 2026-11-12
 
 ### New
@@ -29,4 +43,5 @@ All notable changes. Versions follow [semver](https://semver.org/); tags are `vX
 
 - First release: numbered-menu dashboard, create/start/stop/delete, k9s, context switch, image load, log export.
 
+[0.3.0]: https://github.com/chanupen/kindtui/releases/tag/v0.3.0
 [0.2.0]: https://github.com/chanupen/kindtui/releases/tag/v0.2.0

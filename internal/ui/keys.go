@@ -12,6 +12,9 @@ type hint struct {
 // headerHints are the keys for whatever has focus. The header and the compact
 // footer both render this list, so they cannot drift apart.
 func (m Model) headerHints() []hint {
+	if m.palette {
+		return []hint{{"enter", "run"}, {"↑↓", "select"}, {"ctrl-y", "copy"}, {"esc", "close"}}
+	}
 	if m.cmdMode {
 		return []hint{{"enter", "run"}, {"tab", "complete"}, {"esc", "cancel"}}
 	}
@@ -31,22 +34,13 @@ func (m Model) headerHints() []hint {
 		return append(h, hint{"?", "help"})
 	case scrInfo:
 		return []hint{{"esc", "back"}}
+	case scrRef:
+		return []hint{{"enter", "run"}, {"y", "copy command"}, {"/", "filter"}, {"ctrl-p", "palette"}, {"esc", "back"}}
 	}
 	if m.toolsReady && !m.tools.DaemonOK && m.tools.StartWith != "" {
-		return []hint{{"C", "start " + m.tools.StartWith}, {"?", "help"}, {"q", "quit"}}
+		return []hint{{"C", "start " + m.tools.StartWith}, {"ctrl-p", "palette"}, {"?", "help"}, {"q", "quit"}}
 	}
-	if m.focus == paneNodes {
-		return []hint{
-			{"enter", "shell (login)"}, {"l", "node logs"}, {"b", "kubelet logs"}, {"d", "describe"}, {"p", "pods on node"},
-			{"u", "start node"}, {"x", "stop node"}, {"r", "restart node"}, {"o", "k9s"}, {"esc", "clusters"},
-			{":", "command"}, {"?", "help"}, {"q", "quit"},
-		}
-	}
-	return []hint{
-		{"enter", "nodes"}, {"n", "new"}, {"s", "start"}, {"x", "stop"}, {"r", "restart"},
-		{"ctrl-d", "delete"}, {"o", "k9s"}, {"c", "use context"}, {"i", "load image"}, {"e", "export logs"},
-		{"/", "filter"}, {":", "command"}, {"?", "help"}, {"q", "quit"},
-	}
+	return paneHints(m.focus)
 }
 
 // hintGrid lays hints out in columns of `rows` lines, k9s style.
@@ -96,37 +90,35 @@ func (m Model) helpBox() []string {
 		title string
 		rows  []hint
 	}
+	keyed := func(sc scope) []hint {
+		var out []hint
+		for _, a := range actions {
+			if a.scope != sc || len(a.keys) == 0 {
+				continue
+			}
+			ks := make([]string, 0, 2)
+			for _, k := range a.keys[:min(2, len(a.keys))] {
+				ks = append(ks, prettyKey(k))
+			}
+			out = append(out, hint{strings.Join(ks, " "), a.desc})
+		}
+		return out
+	}
+	var cmds []hint
+	for _, a := range actions {
+		if a.cmd != "" && a.arg != "" {
+			cmds = append(cmds, hint{a.cmdLabel(), a.desc})
+		}
+	}
 	secs := []sec{
-		{"GENERAL", []hint{
-			{"tab", "switch clusters ↔ nodes"}, {"↑↓ j k", "move"}, {"g / G", "first / last"},
-			{"/", "filter clusters"}, {":", "command line"}, {"ctrl-r", "refresh now"},
-			{"I", "tool paths"}, {"C", "start Colima/Podman"}, {"?", "this help"}, {"q", "quit"},
-		}},
-		{"CLUSTERS", []hint{
-			{"enter", "open nodes"}, {"n", "create cluster"}, {"s", "start"}, {"x", "stop"},
-			{"r", "restart"}, {"ctrl-d", "delete"}, {"o", "open in k9s"}, {"c", "set kubectl context"},
-			{"i", "load local image"}, {"e", "export logs ~/kind-logs"},
-		}},
-		{"NODES", []hint{
-			{"enter / s", "shell into node"}, {"l", "container log (follow)"}, {"b", "kubelet journal"},
-			{"J", "containerd journal"}, {"d", "kubectl describe"}, {"p", "pods on node"},
-			{"u", "start node"}, {"x", "stop node"}, {"r", "restart node"}, {"esc", "back"},
-		}},
-		{"COMMANDS  (:)", []hint{
-			{"shell NODE", "log in to any node"}, {"logs NODE", "follow node log"},
-			{"journal U", "journal of unit U"}, {"create", "new cluster"},
-			{"start / stop", "selected cluster"}, {"delete", "selected cluster"},
-			{"filter TEXT", "filter list"}, {"k9s", "open k9s"}, {"info", "tool paths"}, {"quit", ""},
-		}},
+		{"NAVIGATION", navHelp},
+		{"GLOBAL", keyed(scopeGlobal)},
+		{"CLUSTERS PANE", keyed(scopeCluster)},
+		{"NODES PANE", keyed(scopeNode)},
+		{"COMMANDS WITH ARGUMENTS (:)", cmds},
 	}
-	colW := 40
-	cols := 4
-	if m.width < 4*colW+6 {
-		cols = 2
-	}
-	if m.width < 2*colW+6 {
-		cols = 1
-	}
+	colW := 56
+	cols := max(1, min(3, (m.width-6)/colW))
 	var lines []string
 	for i := 0; i < len(secs); i += cols {
 		group := secs[i:min(i+cols, len(secs))]
@@ -144,8 +136,11 @@ func (m Model) helpBox() []string {
 			for _, s := range group {
 				c := ""
 				if r < len(s.rows) {
-					k := s.rows[r].key
-					c = bold(keyC).Render(pad(k, 12)) + " " + paint(dimC).Render(clip(s.rows[r].desc, colW-15))
+					kw := 15
+					if strings.HasPrefix(s.rows[r].key, ":") {
+						kw = 24
+					}
+					c = bold(keyC).Render(pad(s.rows[r].key, kw)) + " " + paint(dimC).Render(clip(s.rows[r].desc, colW-kw-3))
 				}
 				line += pad(c, colW)
 			}
@@ -153,13 +148,17 @@ func (m Model) helpBox() []string {
 		}
 		lines = append(lines, "")
 	}
-	lines = append(lines, paint(dimC).Render("Mouse: click to select, double-click a cluster to open nodes, double-click a node to log in.  esc closes."))
+	lines = append(lines, paint(dimC).Render("K: every action with its shell command   ctrl-p: search and run   esc: close"))
 	w := min(m.width-4, cols*colW+4)
-	body := make([]string, 0, len(lines)+2)
-	body = append(body, "")
+	body := []string{""}
 	for _, l := range lines {
 		body = append(body, " "+l)
 	}
 	h := min(len(body)+2, m.height-2)
+	if len(body)+2 > h {
+		// Too tall: keep the top and say where the rest is.
+		body = body[:h-3]
+		body = append(body, " "+paint(amberC).Render("… more: press K for the full command reference"))
+	}
 	return box("Help", body, w, h, true)
 }

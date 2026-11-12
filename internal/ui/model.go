@@ -17,6 +17,7 @@ const (
 	scrCreate
 	scrOp
 	scrInfo
+	scrRef
 )
 
 type pane int
@@ -80,6 +81,14 @@ type Model struct {
 	cmdMode  bool
 	cmdInput textinput.Model
 
+	palette       bool
+	paletteInput  textinput.Model
+	paletteCursor int
+
+	refCursor    int
+	refFiltering bool
+	refInput     textinput.Model
+
 	shape        int
 	shapeTouched bool
 	inputs       []textinput.Model
@@ -92,6 +101,7 @@ type Model struct {
 	opID      int
 	opKind    string
 	opTitle   string
+	opCmd     string // equivalent shell command shown above the output
 	opLines   []string
 	opRunning bool
 	opErr     string
@@ -171,6 +181,8 @@ func NewWith(e *engine.Engine) Model {
 	m.filter = field("", "name or status", 24)
 	m.cmdInput = field("", "start · stop · shell NODE · logs · k9s · create · help", 48)
 	m.modalInput = field("", "", 40)
+	m.paletteInput = field("", "type to search actions: shell, logs, stop, kubelet…", 60)
+	m.refInput = field("", "filter commands", 40)
 	m.inputs = []textinput.Model{
 		field("kind", "name", 40),
 		field("2", "workers", 6),
@@ -342,7 +354,7 @@ func waitDone(ch <-chan error, id int) tea.Cmd {
 
 // begin runs fn in the background and shows its output on the operation screen.
 // follow pins the view to the newest line; otherwise it starts at the top.
-func (m Model) begin(kind, title string, timeout time.Duration, follow bool, fn func(context.Context, func(string)) error) (Model, tea.Cmd) {
+func (m Model) begin(kind, title, shown string, timeout time.Duration, follow bool, fn func(context.Context, func(string)) error) (Model, tea.Cmd) {
 	if m.eng == nil {
 		return m.note("engine is not ready"), nil
 	}
@@ -356,6 +368,7 @@ func (m Model) begin(kind, title string, timeout time.Duration, follow bool, fn 
 	m.cancel = cancel
 	m.opKind = kind
 	m.opTitle = title
+	m.opCmd = shown
 	m.opLines = nil
 	m.opRunning = true
 	m.opErr = ""
@@ -366,6 +379,7 @@ func (m Model) begin(kind, title string, timeout time.Duration, follow bool, fn 
 	m.help = false
 	m.filtering = false
 	m.cmdMode = false
+	m.palette = false
 	m = m.blur()
 
 	lines := make(chan string, 1024)
@@ -392,6 +406,8 @@ func (m Model) blur() Model {
 	m.filter.Blur()
 	m.cmdInput.Blur()
 	m.modalInput.Blur()
+	m.paletteInput.Blur()
+	m.refInput.Blur()
 	return m
 }
 

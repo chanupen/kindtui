@@ -143,6 +143,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, tea.Batch(cmds...)
+	case copiedMsg:
+		if msg.err != nil {
+			return m.warn("copy failed: " + oneLine(msg.err.Error())), nil
+		}
+		return m.note("copied: " + msg.text), nil
 	case toastMsg:
 		if msg.err != nil {
 			return m.warn(oneLine(msg.err.Error())), nil
@@ -239,6 +244,9 @@ func (m Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m.palette {
+		return m.onPalette(s, k)
+	}
 	if m.modal != modalNone {
 		return m.onModal(s, k)
 	}
@@ -258,51 +266,16 @@ func (m Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = scrDash
 		}
 		return m, nil
+	case scrRef:
+		return m.onRef(s, k)
 	default:
 		return m.onDash(s)
 	}
 }
 
 func (m Model) onDash(s string) (tea.Model, tea.Cmd) {
-	// Keys that work in both panes.
+	// Navigation is not an action; it only moves the cursor.
 	switch s {
-	case "?":
-		m.help = true
-		return m, nil
-	case ":":
-		m.cmdMode = true
-		m.cmdInput.SetValue("")
-		m = m.blur()
-		return m, m.cmdInput.Focus()
-	case "/":
-		m.focus = paneClusters
-		m.filtering = true
-		m = m.blur()
-		return m, m.filter.Focus()
-	case "q":
-		return m.quit()
-	case "ctrl+r", "R":
-		m.detailName = ""
-		m, c1 := m.refresh()
-		m, c2 := m.requestDetail()
-		return m.note("refreshing…"), tea.Batch(c1, c2)
-	case "tab", "shift+tab":
-		if m.focus == paneClusters {
-			return m.enterNodes()
-		}
-		m.focus = paneClusters
-		return m, nil
-	case "I":
-		m.screen = scrInfo
-		return m, nil
-	case "C":
-		return m.startRuntime()
-	case "o":
-		return m.openK9s()
-	case "n":
-		return m.openCreate()
-	case "c":
-		return m.useContext()
 	case "up", "k":
 		return m.moveFocused(-1)
 	case "down", "j":
@@ -315,56 +288,38 @@ func (m Model) onDash(s string) (tea.Model, tea.Cmd) {
 		return m.moveFocused(-1 << 20)
 	case "end", "G":
 		return m.moveFocused(1 << 20)
-	}
-	if m.focus == paneNodes {
-		n, ok := m.selectedNode()
-		switch s {
-		case "enter", "s":
-			return m.shellNode(n, ok)
-		case "l":
-			return m.nodeLogs(n, ok)
-		case "b":
-			return m.journal(n, ok, "kubelet")
-		case "J":
-			return m.journal(n, ok, "containerd")
-		case "d":
-			return m.describeNode(n, ok)
-		case "p":
-			return m.nodePods(n, ok)
-		case "u":
-			return m.nodeAct("start", n, ok)
-		case "x":
-			return m.confirmNode("stop", n, ok)
-		case "r":
-			return m.confirmNode("restart", n, ok)
-		case "esc", "left", "h", "backspace":
-			m.focus = paneClusters
-			return m, nil
+	case "tab", "shift+tab":
+		if m.focus == paneClusters {
+			return m.enterNodes()
 		}
+		m.focus = paneClusters
 		return m, nil
-	}
-	switch s {
-	case "enter", "right":
-		return m.enterNodes()
-	case "s":
-		return m.startSelected()
-	case "x":
-		return m.confirmLife("stop", "Stop cluster", "Stop every node container? The cluster can be started again.")
-	case "r":
-		return m.confirmLife("restart", "Restart cluster", "Stop the nodes, then start them, control plane first.")
-	case "ctrl+d", "D":
-		return m.confirmDelete()
-	case "i":
-		return m.openImage()
-	case "e":
-		return m.exportLogs()
+	case "/":
+		return m.openFilter()
 	case "esc":
-		if m.filter.Value() != "" {
+		if m.focus == paneClusters && m.filter.Value() != "" {
 			m.filter.SetValue("")
 			return m.afterMove()
 		}
 	}
+	if a := actionByKey(s, m.focus); a != nil && a.run != nil {
+		return a.run(m, "")
+	}
 	return m, nil
+}
+
+func (m Model) openCmd() (Model, tea.Cmd) {
+	m.cmdMode = true
+	m.cmdInput.SetValue("")
+	m = m.blur()
+	return m, m.cmdInput.Focus()
+}
+
+func (m Model) openFilter() (Model, tea.Cmd) {
+	m.focus = paneClusters
+	m.filtering = true
+	m = m.blur()
+	return m, m.filter.Focus()
 }
 
 func (m Model) enterNodes() (tea.Model, tea.Cmd) {
@@ -418,12 +373,6 @@ func clamp(v, lo, hi int) int {
 }
 
 // ---------- command line ----------
-
-var commands = []string{
-	"clusters", "context", "create", "delete", "describe", "export", "filter", "help", "image",
-	"info", "journal", "k9s", "kubelet", "logs", "nodes", "pods", "quit", "refresh", "restart",
-	"runtime", "shell", "ssh", "start", "stop",
-}
 
 func (m Model) onCmd(s string, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch s {
@@ -486,7 +435,7 @@ func (m Model) complete(line string) string {
 	case len(fields) == 0:
 		return line
 	case len(fields) == 1 && !trailing:
-		return pick(fields[0], commands)
+		return pick(fields[0], commandNames())
 	default:
 		last := ""
 		if !trailing {
@@ -509,124 +458,16 @@ func (m Model) runCommand(line string) (tea.Model, tea.Cmd) {
 	if len(fields) == 0 {
 		return m, nil
 	}
-	cmd := strings.ToLower(fields[0])
-	arg := ""
-	if len(fields) > 1 {
-		arg = fields[1]
+	name := strings.ToLower(fields[0])
+	arg := strings.Join(fields[1:], " ")
+	if a := actionByCmd(name); a != nil && a.run != nil {
+		return a.run(m, arg)
 	}
-	// Optional node argument: any node in any cluster.
-	node := func() (engine.Node, bool) {
-		if arg == "" {
-			n, ok := m.selectedNode()
-			if !ok {
-				return m.firstNode()
-			}
-			return n, ok
-		}
-		return m.findNode(arg)
+	// A bare node name logs in to it.
+	if _, ok := m.findNode(fields[0]); ok {
+		return actionByID("shell").run(m, fields[0])
 	}
-	needNode := func(fn func(engine.Node, bool) (Model, tea.Cmd)) (tea.Model, tea.Cmd) {
-		n, ok := node()
-		if !ok && arg != "" {
-			return m.warn("no node named " + arg), nil
-		}
-		return fn(n, ok)
-	}
-	switch cmd {
-	case "q", "quit", "exit", "q!":
-		return m.quit()
-	case "help", "h", "?":
-		m.help = true
-		return m, nil
-	case "info":
-		m.screen = scrInfo
-		return m, nil
-	case "refresh", "r":
-		m.detailName = ""
-		m, c1 := m.refresh()
-		m, c2 := m.requestDetail()
-		return m, tea.Batch(c1, c2)
-	case "clusters", "cl":
-		m.focus = paneClusters
-		return m, nil
-	case "nodes", "no", "node":
-		if arg != "" {
-			if mm, ok := m.selectCluster(arg); ok {
-				m = mm
-			}
-		}
-		return m.enterNodes()
-	case "cluster":
-		mm, ok := m.selectCluster(arg)
-		if !ok {
-			return m.warn("no cluster named " + arg), nil
-		}
-		return mm.afterMove()
-	case "start":
-		return m.startSelected()
-	case "stop":
-		return m.confirmLife("stop", "Stop cluster", "Stop every node container? The cluster can be started again.")
-	case "restart":
-		return m.confirmLife("restart", "Restart cluster", "Stop the nodes, then start them, control plane first.")
-	case "create", "new":
-		return m.openCreate()
-	case "delete", "del", "rm":
-		return m.confirmDelete()
-	case "k9s":
-		return m.openK9s()
-	case "context", "ctx", "use":
-		return m.useContext()
-	case "image", "load":
-		if arg != "" {
-			c, ok := m.selected()
-			if !ok {
-				return m.note("no cluster selected"), nil
-			}
-			return m.runAct("image", c, "", arg)
-		}
-		return m.openImage()
-	case "export":
-		return m.exportLogs()
-	case "runtime":
-		return m.startRuntime()
-	case "filter":
-		m.filter.SetValue(strings.Join(fields[1:], " "))
-		return m.afterMove()
-	case "shell", "ssh", "login", "exec", "sh":
-		return needNode(m.shellNode)
-	case "logs", "log":
-		return needNode(m.nodeLogs)
-	case "kubelet":
-		return needNode(func(n engine.Node, ok bool) (Model, tea.Cmd) { return m.journal(n, ok, "kubelet") })
-	case "journal":
-		unit := arg
-		if unit == "" {
-			unit = "kubelet"
-		}
-		target := ""
-		if len(fields) > 2 {
-			target = fields[2]
-		}
-		var n engine.Node
-		var ok bool
-		if target != "" {
-			if n, ok = m.findNode(target); !ok {
-				return m.warn("no node named " + target), nil
-			}
-		} else if n, ok = m.selectedNode(); !ok {
-			n, ok = m.firstNode()
-		}
-		return m.journal(n, ok, unit)
-	case "describe", "desc":
-		return needNode(m.describeNode)
-	case "pods", "po":
-		return needNode(m.nodePods)
-	}
-	if _, ok := m.findNode(cmd); ok {
-		arg = cmd
-		return needNode(m.shellNode)
-	}
-	return m.warn("unknown command: " + cmd + "  (try :help)"), nil
+	return m.warn("unknown command: " + name + "  (ctrl-p searches every action, K lists them)"), nil
 }
 
 func (m Model) selectCluster(name string) (Model, bool) {
@@ -890,27 +731,27 @@ func (m Model) runAct(act string, cluster engine.Cluster, node, extra string) (t
 	eng := m.eng
 	switch act {
 	case "stop":
-		return m.begin("stop", "Stop "+cluster.Name, 3*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+		return m.begin("stop", "Stop "+cluster.Name, m.shellFor("stop", ""), 3*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 			return eng.Stop(ctx, cluster, emit)
 		})
 	case "restart":
-		return m.begin("restart", "Restart "+cluster.Name, 4*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+		return m.begin("restart", "Restart "+cluster.Name, m.shellFor("restart", ""), 4*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 			return eng.Restart(ctx, cluster, emit)
 		})
 	case "node-stop", "node-restart", "node-start":
 		verb := strings.TrimPrefix(act, "node-")
-		return m.begin("node", strings.ToUpper(verb[:1])+verb[1:]+" "+node, 2*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+		return m.begin("node", strings.ToUpper(verb[:1])+verb[1:]+" "+node, m.shellFor(act, node), 2*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 			return eng.NodeAction(ctx, verb, node, emit)
 		})
 	case "delete":
-		return m.begin("delete", "Delete "+cluster.Name, 5*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+		return m.begin("delete", "Delete "+cluster.Name, m.shellFor("delete", ""), 5*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 			return eng.Delete(ctx, cluster.Name, emit)
 		})
 	case "image":
 		if !engine.ValidImage(extra) || extra == "" {
 			return m.warn("invalid image " + extra), nil
 		}
-		return m.begin("load", "Load "+extra+" → "+cluster.Name, 10*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+		return m.begin("load", "Load "+extra+" → "+cluster.Name, "kind load docker-image "+extra+" --name "+cluster.Name, 10*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 			return eng.LoadImage(ctx, cluster.Name, extra, emit)
 		})
 	}
@@ -922,6 +763,10 @@ func (m Model) forward(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.modal == modalType || m.modal == modalImage:
 		m.modalInput, cmd = m.modalInput.Update(msg)
+	case m.palette:
+		m.paletteInput, cmd = m.paletteInput.Update(msg)
+	case m.screen == scrRef && m.refFiltering:
+		m.refInput, cmd = m.refInput.Update(msg)
 	case m.cmdMode:
 		m.cmdInput, cmd = m.cmdInput.Update(msg)
 	case m.filtering:
@@ -937,7 +782,7 @@ func (m Model) forward(msg tea.Msg) (tea.Model, tea.Cmd) {
 // ---------- mouse ----------
 
 func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.help || m.modal != modalNone || m.cmdMode || m.filtering {
+	if m.help || m.palette || m.modal != modalNone || m.cmdMode || m.filtering {
 		return m, nil
 	}
 	if m.screen == scrOp {
@@ -1133,7 +978,7 @@ func (m Model) nodeLogs(n engine.Node, ok bool) (Model, tea.Cmd) {
 		return m.note("select a node first"), nil
 	}
 	eng := m.eng
-	return m.begin("logs", "Logs("+n.Name+") · container log", 30*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+	return m.begin("logs", "Logs("+n.Name+") · container log", m.shellFor("logs", n.Name), 30*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 		return eng.NodeLogs(ctx, n.Name, true, emit)
 	})
 }
@@ -1147,7 +992,7 @@ func (m Model) journal(n engine.Node, ok bool, unit string) (Model, tea.Cmd) {
 		return m.warn("bad unit name " + unit), nil
 	}
 	eng := m.eng
-	return m.begin("journal", "Journal("+n.Name+") · "+unit, 30*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+	return m.begin("journal", "Journal("+n.Name+") · "+unit, strings.Replace(m.shellFor("journal", n.Name), "UNIT", unit, 1), 30*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 		return eng.Journal(ctx, n.Name, unit, true, emit)
 	})
 }
@@ -1159,7 +1004,7 @@ func (m Model) describeNode(n engine.Node, ok bool) (Model, tea.Cmd) {
 		return m, nil
 	}
 	eng := m.eng
-	return m.begin("describe", "Describe(node/"+n.Name+")", time.Minute, false, func(ctx context.Context, emit func(string)) error {
+	return m.begin("describe", "Describe(node/"+n.Name+")", m.shellFor("describe", n.Name), time.Minute, false, func(ctx context.Context, emit func(string)) error {
 		return eng.DescribeNode(ctx, c, n.Name, emit)
 	})
 }
@@ -1171,7 +1016,7 @@ func (m Model) nodePods(n engine.Node, ok bool) (Model, tea.Cmd) {
 		return m, nil
 	}
 	eng := m.eng
-	return m.begin("pods", "Pods(node/"+n.Name+")", time.Minute, false, func(ctx context.Context, emit func(string)) error {
+	return m.begin("pods", "Pods(node/"+n.Name+")", m.shellFor("pods", n.Name), time.Minute, false, func(ctx context.Context, emit func(string)) error {
 		return eng.NodePods(ctx, c, n.Name, emit)
 	})
 }
@@ -1262,7 +1107,7 @@ func (m Model) startSelected() (Model, tea.Cmd) {
 		return m.note(c.Name + " is already running"), nil
 	}
 	eng := m.eng
-	return m.begin("start", "Start "+c.Name, 3*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+	return m.begin("start", "Start "+c.Name, m.shellFor("start", ""), 3*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 		return eng.Start(ctx, c, emit)
 	})
 }
@@ -1340,7 +1185,7 @@ func (m Model) exportLogs() (Model, tea.Cmd) {
 		return m.note("no cluster selected"), nil
 	}
 	eng := m.eng
-	return m.begin("export", "Export logs "+c.Name, 5*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+	return m.begin("export", "Export logs "+c.Name, m.shellFor("export", ""), 5*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 		_, err := eng.ExportLogs(ctx, c.Name, emit)
 		return err
 	})
@@ -1364,7 +1209,7 @@ func (m Model) startRuntime() (Model, tea.Cmd) {
 		title = "Start Podman machine"
 	}
 	eng := m.eng
-	return m.begin("runtime", title, 10*time.Minute, true, func(ctx context.Context, emit func(string)) error {
+	return m.begin("runtime", title, m.shellFor("runtime", ""), 10*time.Minute, true, func(ctx context.Context, emit func(string)) error {
 		return eng.StartRuntime(ctx, emit)
 	})
 }
@@ -1383,7 +1228,7 @@ func (m Model) submitCreate() (Model, tea.Cmd) {
 	}
 	eng := m.eng
 	timeout := 15*time.Minute + spec.Wait
-	return m.begin("create", "Create "+spec.Name, timeout, true, func(ctx context.Context, emit func(string)) error {
+	return m.begin("create", "Create "+spec.Name, engine.CreatePreview(spec), timeout, true, func(ctx context.Context, emit func(string)) error {
 		return eng.Create(ctx, spec, emit)
 	})
 }

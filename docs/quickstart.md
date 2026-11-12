@@ -50,9 +50,9 @@ kind version && docker info >/dev/null && echo ok
 
 ```sh
 OS=$(uname -s | tr A-Z a-z); ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-gh release download v0.2.0 -R chanupen/kindtui -p "kindtui-$OS-$ARCH" -O kindtui
+gh release download v0.3.0 -R chanupen/kindtui -p "kindtui-$OS-$ARCH" -O kindtui
 install -m 0755 kindtui ~/.local/bin/kindtui
-kindtui --version          # kindtui v0.2.0
+kindtui --version          # kindtui v0.3.0
 ```
 
 **Option B: from source** (needs Go)
@@ -143,7 +143,13 @@ In the log view, `↑↓`/`pgup`/`pgdn` scroll, `g`/`G` jump to the top or botto
 
 In the nodes pane, `x`, `u`, and `r` stop, start, and restart a single node. This is useful for testing how workloads behave when a node goes down.
 
+## 10. Find any action and learn its command
+
+- `ctrl-p` opens the command palette. Type "kubelet" or "stop node" and press `enter`.
+- `K` opens the command reference: every action with the exact `kind`, `kubectl`, or `docker`/`podman` command it runs, filled in for the selected cluster and node. Press `y` to copy one.
+- Every log and operation screen shows its command on the first line, so you can rerun it outside kindtui.
+
 ## Next
 
-- Every key and command: [usage.md](usage.md)
+- Every key and command: [usage.md](usage.md) and [commands.md](commands.md)
 - Something not working: [troubleshooting.md](troubleshooting.md)

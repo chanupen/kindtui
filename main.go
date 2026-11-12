@@ -10,7 +10,7 @@ import (
 	"github.com/chanupen/kindtui/internal/ui"
 )
 
-var version = "0.2.0"
+var version = "0.3.0"
 
 const usage = `kindtui - terminal UI for kind (Kubernetes in Docker) clusters
 
@@ -18,6 +18,7 @@ Usage:
   kindtui              start the UI (needs a terminal)
   kindtui --version    print the version
   kindtui --help       print this help
+  kindtui --cheatsheet print every action, key, : command and shell equivalent (Markdown)
 
 In the UI:
   tab        switch between the clusters and nodes panes
@@ -25,6 +26,8 @@ In the UI:
   n s x r    create, start, stop, restart
   l b d p    node log, kubelet journal, describe, pods on node
   :          command line (:shell NODE, :logs NODE, :help ...)
+  ctrl-p     command palette: search and run any action
+  K          command reference with the equivalent shell commands
   ?          all keys
   q          quit
 
@@ -39,6 +42,9 @@ func main() {
 		switch os.Args[1] {
 		case "--version", "-v", "version":
 			fmt.Println("kindtui", version)
+			return
+		case "--cheatsheet", "cheatsheet":
+			fmt.Print(ui.Cheatsheet())
 			return
 		case "--help", "-h", "help":
 			fmt.Print(usage)

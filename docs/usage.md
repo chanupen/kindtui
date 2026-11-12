@@ -55,6 +55,8 @@ Cluster status:
 | `g` `G` / `home` `end` | First / last row |
 | `/` | Filter clusters by name or status (`enter` applies, `esc` clears) |
 | `:` | Command line |
+| `ctrl-p` | Command palette: search every action and run it |
+| `K` | Command reference: every action with its equivalent shell command |
 | `ctrl-r` / `R` | Refresh now |
 | `n` | Create a cluster |
 | `o` | Open k9s on the selected cluster |
@@ -126,7 +128,13 @@ Type `:` and then a command. `tab` completes command names and, for the second w
 | `export` | Export logs |
 | `filter TEXT` | Filter the cluster list (empty clears it) |
 | `runtime` | Start Colima or Podman |
+| `node-start [NODE]`, `node-stop [NODE]`, `node-restart [NODE]` | Lifecycle for one node (stop and restart ask first) |
+| `containerd [NODE]` | Follow the containerd journal |
+| `cmds` / `commands` / `ref` | Command reference screen |
+| `palette` | Command palette |
 | `refresh`, `info`, `help`, `quit` | Refresh, tool paths, help, quit |
+
+The full list, generated from the code, is in [commands.md](commands.md).
 
 ## Create form
 
@@ -140,9 +148,40 @@ Type `:` and then a command. `tab` completes command names and, for the second w
 
 `tab` and `shift+tab` move between fields, `enter` creates, and `esc` goes back. The form previews the exact `kind create cluster` command and, for generated shapes, the YAML. A generated config file is deleted once kind returns.
 
+## Command palette (`ctrl-p`)
+
+A search box over every action. Type part of a name or description ("kube", "stop node", "desc"). Name matches rank first, then description matches, then fuzzy matches (letters in order). The bottom line shows the shell command the highlighted action is equivalent to.
+
+| Key | Action |
+| --- | --- |
+| type | Filter |
+| `↑` `↓` / `tab` | Select |
+| `enter` | Run, exactly as if you pressed its key. Stop, restart, and delete still ask first |
+| `ctrl-y` | Copy the shell command |
+| `esc` / `ctrl-p` | Close |
+
+Node actions run on the selected node, or on the control plane when the nodes pane is not focused.
+
+## Command reference (`K` or `:cmds`)
+
+A full-screen table of every action: key, `:` command, scope (global, cluster, or node), description, and the **equivalent shell command filled in for the selected cluster and node**, for example `podman exec -it lab-worker2 bash -l` or `kubectl --context kind-lab describe node lab-worker2`. Use it to learn what kindtui does, or to copy a command into a script.
+
+| Key | Action |
+| --- | --- |
+| `↑` `↓` `pgup` `pgdn` `g` `G` | Move |
+| `/` | Filter |
+| `enter` | Run the action |
+| `y` | Copy the shell command |
+| `ctrl-p` | Palette |
+| `esc` / `q` / `K` | Back |
+
+The bottom lines show the selected action's full description and command. Commands are shown with `--context kind-<cluster>`; kindtui itself runs kubectl with a private kubeconfig for the same cluster.
+
+**Copying** uses the system clipboard when a helper is installed (`wl-copy`, `xclip`, `xsel`, or `pbcopy`) and also sends an OSC 52 sequence, so it works over SSH and in terminals that support OSC 52 (kitty, WezTerm, iTerm2, foot, Windows Terminal, Alacritty, and tmux with `set -g set-clipboard on`).
+
 ## Log and operation view
 
-Logs, journals, describe, pods, and long operations (create, delete, start, stop, image load, log export) all open in one view.
+Logs, journals, describe, pods, and long operations (create, delete, start, stop, image load, log export) all open in one view. The line under the title shows the equivalent shell command, e.g. `$ podman logs -f --tail 300 lab-worker`.
 
 | Key | Action |
 | --- | --- |

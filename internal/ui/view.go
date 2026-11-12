@@ -86,6 +86,8 @@ func (m Model) View() string {
 		lines = append(lines, m.opView(g.body.w, g.body.h)...)
 	case scrInfo:
 		lines = append(lines, m.infoView(g.body.w, g.body.h)...)
+	case scrRef:
+		lines = append(lines, m.refView(g.body.w, g.body.h)...)
 	default:
 		lines = append(lines, m.dashView(g)...)
 	}
@@ -93,6 +95,8 @@ func (m Model) View() string {
 	lines = grow(lines, m.height, m.width)
 	if m.help {
 		lines = overlay(lines, m.helpBox(), m.width, m.height)
+	} else if m.palette {
+		lines = overlay(lines, m.paletteBox(), m.width, m.height)
 	} else if m.modal != modalNone {
 		lines = overlay(lines, m.modalBox(), m.width, m.height)
 	}
@@ -624,6 +628,8 @@ func (m Model) footerLines(g geom) []string {
 		crumbs = []string{pill("clusters", false), pill(m.opKind, true)}
 	case scrInfo:
 		crumbs = []string{pill("clusters", false), pill("info", true)}
+	case scrRef:
+		crumbs = []string{pill("clusters", false), pill("commands", true)}
 	default:
 		c, ok := m.selected()
 		if m.focus == paneNodes && ok {

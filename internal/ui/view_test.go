@@ -167,7 +167,7 @@ func TestFilterHelpAndResize(t *testing.T) {
 		t.Fatalf("filter selected %+v %v", c, ok)
 	}
 	h := press(sample(), "?")
-	if v := checkFrame(t, h); !strings.Contains(v, "COMMANDS") || !strings.Contains(v, "shell into node") {
+	if v := checkFrame(t, h); !strings.Contains(v, "NODES PANE") || !strings.Contains(v, "Log in to the node") {
 		t.Fatalf("help\n%s", v)
 	}
 	if press(h, "esc").help {

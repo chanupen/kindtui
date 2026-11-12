@@ -3,7 +3,7 @@ BIN     := bin/kindtui
 LDFLAGS := -s -w -X main.version=$(VERSION)
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 
-.PHONY: build test vet fmt run install tidy dist clean
+.PHONY: build test vet fmt run install tidy dist clean docs
 
 build: ## Build bin/kindtui
 	mkdir -p bin
@@ -24,6 +24,9 @@ run: build ## Build and start the UI
 
 install: ## go install into $GOBIN
 	go install -trimpath -ldflags "$(LDFLAGS)" .
+
+docs: ## Regenerate docs/commands.md from the action registry
+	go run . --cheatsheet > docs/commands.md
 
 tidy:
 	go mod tidy

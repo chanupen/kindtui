@@ -4,7 +4,7 @@ Reference for the next change to this tree. User docs: [README](../README.md), [
 
 kindtui is a Bubble Tea program in ``. It shells out to `docker` or `podman`, `kind`, and `kubectl`. It does not link the kind or client-go libraries. That keeps the binary small and matches the CLIs already installed on the machine.
 
-Version is `main.version` in `main.go`, stamped by the Makefile ldflags. Current release: [v0.2.0](https://github.com/chanupen/kindtui/releases/tag/v0.2.0). In a git checkout, `make` stamps `git describe` instead. Release binaries are built by CI on `v*` tags (see [CONTRIBUTING](../CONTRIBUTING.md#releases)).
+Version is `main.version` in `main.go`, stamped by the Makefile ldflags. Current release: [v0.3.0](https://github.com/chanupen/kindtui/releases/tag/v0.3.0). In a git checkout, `make` stamps `git describe` instead. Release binaries are built by CI on `v*` tags (see [CONTRIBUTING](../CONTRIBUTING.md#releases)).
 
 ## File map
 
@@ -19,6 +19,8 @@ Version is `main.version` in `main.go`, stamped by the Makefile ldflags. Current
 | `internal/engine/engine.go` | `Engine` handle, env, `List`, node shell, node start/stop/restart, node log, journal |
 | `internal/engine/kube.go` | Detail (parallel), describe node, pods on node, kubeconfig cache, k9s, context switch |
 | `internal/engine/ops.go` | Create, delete, start, stop, load, export, Colima/Podman |
+| `internal/ui/actions.go` | **Action registry**: every action's keys, `:` command, scope, hint, description, shell equivalent, and handler. `Cheatsheet()` |
+| `internal/ui/palette.go` | Command palette (`ctrl-p`), command reference screen (`K`), action search, clipboard copy |
 | `internal/ui/model.go` | State, background commands, operation runner |
 | `internal/ui/update.go` | Keys per pane, `:` command line, mouse, actions |
 | `internal/ui/view.go` | `geom` layout, header, clusters/nodes/overview panes, footer |
@@ -104,15 +106,44 @@ The preview at the bottom of the form is `CreatePreview`. It shows `<generated>`
 
 Timeouts: list 6s, detail 8s, probe commands 2–3s each, create is `15m + --wait`, log follow 30m, Colima or Podman start 10m. Most other mutations are 2–5m.
 
+## Action registry
+
+`internal/ui/actions.go` holds one `action` per thing kindtui can do:
+
+```go
+{id: "kubelet", keys: []string{"b"}, cmd: "kubelet", arg: "[NODE]", scope: scopeNode, hint: "kubelet logs",
+    desc:  "Follow the kubelet journal inside the node",
+    shell: func(t target) string { return t.rt + " exec " + t.node + " journalctl -u kubelet -f -n 300" },
+    run:   onNode(func(m Model, n engine.Node, ok bool) (Model, tea.Cmd) { return m.journal(n, ok, "kubelet") })},
+```
+
+Everything below reads the registry, so it cannot drift:
+
+| Consumer | Uses |
+| --- | --- |
+| `onDash` key dispatch | `actionByKey(key, focus)`: the pane's binding wins over a global one |
+| `:` command line | `actionByCmd(name)` plus aliases; `commandNames()` for tab completion |
+| Header hints | `paneHints(pane)` in the order of `hintIDs` |
+| Help overlay | Grouped by scope, plus every command that takes an argument |
+| Palette and reference | `matchActions(query)`; `shell(m.target(""))` fills in the selection |
+| Op view `$` line | `m.shellFor(id, node)` passed to `begin` |
+| `docs/commands.md` | `Cheatsheet()` via `kindtui --cheatsheet` / `make docs`, with a placeholder target |
+
+`target` is what a shell command is about: runtime name, cluster, node, and node start order. In the UI it comes from the selection; in docs it is `<cluster>`, `<node>`, and `docker`.
+
+Navigation keys (arrows, `tab`, `/`, `esc` to clear the filter) are handled in `onDash` before the registry, because they are not actions.
+
+Tests enforce that IDs, `:` names, and keys are unique per scope, that a global key is never also a pane key, that every hint ID exists, and that `docs/commands.md` equals `Cheatsheet()`.
+
 ## UI model
 
-Screens: dashboard, create, operation, info. The dashboard has two panes, clusters and nodes, and `focus` says which one gets keys. Help and modals (yes/no confirm, type-the-name delete, image name) are drawn over the current screen with `overlay`. `:` and `/` open a one-line prompt box under the header.
+Screens: dashboard, create, operation, info, command reference. Overlays: help, command palette, modals. The dashboard has two panes, clusters and nodes, and `focus` says which one gets keys. Help and modals (yes/no confirm, type-the-name delete, image name) are drawn over the current screen with `overlay`. `:` and `/` open a one-line prompt box under the header.
 
 `geom()` computes every rectangle: header (6 rows, or 1 below 24 rows), prompt, panes, overview, footer. `View` and the mouse handler both use it, so click hit-testing cannot drift from what is drawn. Every frame is exactly `width × height`. Tests check each line's width.
 
 `table` lays out columns by priority: when space runs out, the highest `prio` column is hidden first. `NAME` sizes itself to the longest name.
 
-`begin(kind, title, timeout, follow, fn)` owns one operation at a time. `follow` pins the view to the newest line (logs, create) or starts at the top (describe, pods). Lines arrive in batches, so a chatty log costs one render per batch. Viewer kinds (`logs`, `journal`, `describe`, `pods`, `export`) do not pause the background refresh, and `esc` stops them and goes back. Mutating kinds cancel on `esc`.
+`begin(kind, title, shown, timeout, follow, fn)` owns one operation at a time. `follow` pins the view to the newest line (logs, create) or starts at the top (describe, pods). Lines arrive in batches, so a chatty log costs one render per batch. Viewer kinds (`logs`, `journal`, `describe`, `pods`, `export`) do not pause the background refresh, and `esc` stops them and goes back. Mutating kinds cancel on `esc`.
 
 Background ticks are one second. The cluster list refreshes every two, detail every five, and a new tool probe every fifteen. In-flight list and detail calls are single-flight. Stale tool probes are dropped with `toolsSeq`.
 
@@ -121,16 +152,17 @@ Colors are fixed mid-tones and body text uses the terminal's own foreground, so 
 ## Adding a command
 
 1. Put the process work on `Engine` and stream with `streamCmd` or `capture`. Validate every argument with `ValidName`, `ValidIdent`, or `ValidImage` before it reaches `exec`.
-2. Add a key in `update.go` (`onDash`, in the right pane branch), a hint in `keys.go` `headerHints`, a row in `helpBox`, and a `:` command in `runCommand` if it takes an argument.
-3. Long work goes through `begin`, which gives cancel and a log. Short work can return `toastMsg`.
-4. Interactive tools (`docker exec -it`, `k9s`) must use `tea.ExecProcess`. Build the command with `Engine.ShellCmd` or `Engine.K9sCmd`. Leave the command's stdio unset. Bubble Tea attaches the terminal.
-5. Extend `View` only with data already on the model.
+2. Add one entry to `buildActions()` in `internal/ui/actions.go`: id, keys, `:` name, scope, description, `shell` equivalent, and `run`. Add its id to `hintIDs` if it belongs in the header. Key dispatch, `:` command, completion, help, palette, and reference pick it up automatically.
+3. Long work goes through `begin(kind, title, m.shellFor(id, node), …)`, which gives cancel, a log, and the `$` command line. Short work can return `toastMsg`.
+4. Run `make docs` to regenerate `docs/commands.md` (a test fails if you forget), and describe new screens in `docs/usage.md`.
+5. Interactive tools (`docker exec -it`, `k9s`) must use `tea.ExecProcess`. Build the command with `Engine.ShellCmd` or `Engine.K9sCmd`. Leave the command's stdio unset. Bubble Tea attaches the terminal.
+6. Extend `View` only with data already on the model.
 
 ## Tests
 
 `internal/engine/engine_test.go` covers ps parsing, status, start/stop order, pod and event JSON, kind YAML, validators, runtime preference (live Podman beats a stopped Docker; a Docker client beats a stopped Podman; broken symlinks are skipped), echo streaming, and cancel of `sleep`.
 
-`internal/ui/view_test.go` renders a fixed model at several widths and checks every line's width, that all nodes appear, the banner, node focus and actions, confirm and delete modals, filter, help, compact layout, create, the `:` command line and completion, and mouse selection. It passes a nil engine. `begin` refuses to start without an engine.
+`internal/ui/view_test.go` renders a fixed model at several widths and checks every line's width, that all nodes appear, the banner, node focus and actions, confirm and delete modals, filter, help, compact layout, create, the `:` command line and completion, and mouse selection. `internal/ui/actions_test.go` covers the registry rules, the generated docs, the reference screen, the palette, pane-specific key dispatch, and the `$` command line. They pass a nil engine. `begin` refuses to start without an engine.
 
 `KINDTUI_LIVE=1 go test ./internal/engine/ -run TestLiveDiscover -v` prints the runtime this machine actually resolved. It is skipped by `make test`.
 

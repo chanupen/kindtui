@@ -95,7 +95,15 @@ func (m Model) opStatusText() string {
 // opBodyH is the number of log lines that fit on the operation screen.
 func (m Model) opBodyH() int {
 	g := m.geom()
-	return max(1, g.body.h-3)
+	return max(1, g.body.h-3-m.opCmdLines())
+}
+
+// opCmdLines is 1 when the op view shows its equivalent shell command.
+func (m Model) opCmdLines() int {
+	if m.opCmd != "" {
+		return 1
+	}
+	return 0
 }
 
 func (m Model) opStart() int {
@@ -108,17 +116,21 @@ func (m Model) opStart() int {
 }
 
 func (m Model) opView(w, h int) []string {
-	bh := h - 3
+	bh := h - 3 - m.opCmdLines()
 	start := m.opStart()
 	end := min(len(m.opLines), start+bh)
 	var lines []string
+	var head []string
+	if m.opCmd != "" {
+		head = []string{" " + paint(greenC).Render(clip("$ "+m.opCmd, w-4))}
+	}
 	if len(m.opLines) == 0 {
 		lines = append(lines, paint(dimC).Render(" waiting for output…"))
 	}
 	for _, ln := range m.opLines[start:end] {
 		lines = append(lines, " "+colorLog(clip(strings.ReplaceAll(ln, "\t", "    "), w-3)))
 	}
-	lines = grow(lines, bh, w-2)
+	lines = append(head, grow(lines, bh, w-2)...)
 	pos := "all"
 	if len(m.opLines) > bh {
 		pct := 100

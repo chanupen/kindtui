@@ -21,6 +21,7 @@ You need Go at the version in `go.mod`. To try the app against real clusters, yo
 | `make fmt` | `gofmt -w .` |
 | `make dist` | Release binaries for linux/darwin × amd64/arm64 in `dist/` |
 | `make install` | `go install` |
+| `make docs` | Regenerate `docs/commands.md` from the action registry |
 
 To probe the tools actually installed on your machine:
 
@@ -33,7 +34,7 @@ KINDTUI_LIVE=1 go test ./internal/engine/ -run TestLiveDiscover -v
 - `View` is pure. Every `docker`, `kind`, and `kubectl` call runs in a `tea.Cmd`.
 - Validate every value passed to `exec` with `ValidName`, `ValidIdent`, or `ValidImage`.
 - Data commands (JSON, kubeconfig) use `captureOut` so stderr warnings cannot corrupt them.
-- A new key needs: a handler in `update.go`, a hint in `keys.go` `headerHints`, a row in `helpBox`, and a line in `docs/usage.md`.
+- A new action is one entry in `buildActions()` (`internal/ui/actions.go`). Keys, `:` command, hints, help, palette, and reference all read it. Then run `make docs`; `TestCheatsheetMatchesDocs` fails when `docs/commands.md` is stale.
 - Interactive programs (shells, k9s) go through `tea.ExecProcess`.
 
 [docs/architecture.md](docs/architecture.md) has the details.
@@ -47,4 +48,4 @@ KINDTUI_LIVE=1 go test ./internal/engine/ -run TestLiveDiscover -v
 5. Check it: `gh release view vX.Y.Z -R chanupen/kindtui`.
 6. Update your local install: `make build VERSION=vX.Y.Z && install -m 0755 bin/kindtui ~/.local/bin/`.
 
-Released so far: [v0.2.0](https://github.com/chanupen/kindtui/releases/tag/v0.2.0).
+Released so far: [v0.2.0](https://github.com/chanupen/kindtui/releases/tag/v0.2.0), [v0.3.0](https://github.com/chanupen/kindtui/releases/tag/v0.3.0).
