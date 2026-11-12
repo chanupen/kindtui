@@ -11,6 +11,7 @@
 - Overview: Kubernetes version, API endpoint, pod health, restarts, node image and OS, newest warning event.
 - Log view with follow toggle, paging, a 5000-line buffer, and error/warning coloring.
 - Mouse: click to select, double-click to open or log in, wheel scrolling.
+- MIT license.
 - Repository: root Go module `github.com/chanupen/kindtui`, CI on Linux and macOS, release binaries on tags, and full docs.
 
 ### Fixed

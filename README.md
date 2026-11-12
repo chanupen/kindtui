@@ -111,3 +111,7 @@ Everywhere: `tab` switches panes, `/` filters, `:` opens the command line, `ctrl
 ## How it works
 
 kindtui shells out to `docker`/`podman`, `kind`, and `kubectl` instead of linking their libraries, so it always matches the versions you have installed. It lists clusters from container labels (`io.x-k8s.kind.cluster`), which means stopped clusters still appear. It never edits `~/.kube/config` unless you press `c`; k9s and kubectl queries use a private temporary kubeconfig. See [docs/architecture.md](docs/architecture.md).
+
+## License
+
+[MIT](LICENSE)
