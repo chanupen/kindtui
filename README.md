@@ -55,12 +55,12 @@ Latest release: **[v0.3.0](https://github.com/chanupen/kindtui/releases/tag/v0.3
 
 **Prebuilt binary (recommended)**
 
-The repository is private, so download with the GitHub CLI (`gh auth login` first):
+The repository is public under the MIT licence, so no GitHub login is needed:
 
 ```sh
 OS=$(uname -s | tr A-Z a-z)                                   # linux | darwin
 ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')     # amd64 | arm64
-gh release download v0.3.0 -R chanupen/kindtui -p "kindtui-$OS-$ARCH" -O kindtui
+curl -fL -o kindtui "https://github.com/chanupen/kindtui/releases/download/v0.3.0/kindtui-$OS-$ARCH"
 install -m 0755 kindtui ~/.local/bin/kindtui                  # or: sudo install kindtui /usr/local/bin/
 kindtui --version
 ```
@@ -81,8 +81,6 @@ install -m 0755 bin/kindtui ~/.local/bin/   # or: sudo install bin/kindtui /usr/
 ```sh
 go install github.com/chanupen/kindtui@latest
 ```
-
-The repository is private, so first set `GOPRIVATE=github.com/chanupen/*` and make sure git can authenticate to GitHub.
 
 **Upgrading:** repeat the download with the new tag, or `git pull && make build` and reinstall. Settings live nowhere else, so nothing needs migrating.
 
