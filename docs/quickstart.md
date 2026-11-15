@@ -46,11 +46,11 @@ kind version && docker info >/dev/null && echo ok
 
 ## 2. Install kindtui
 
-**Option A: release binary** (needs `gh auth login`; the repo is private)
+**Option A: release binary** (no GitHub login needed)
 
 ```sh
 OS=$(uname -s | tr A-Z a-z); ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-gh release download v0.3.0 -R chanupen/kindtui -p "kindtui-$OS-$ARCH" -O kindtui
+curl -fL -o kindtui "https://github.com/chanupen/kindtui/releases/download/v0.3.0/kindtui-$OS-$ARCH"
 install -m 0755 kindtui ~/.local/bin/kindtui
 kindtui --version          # kindtui v0.3.0
 ```
